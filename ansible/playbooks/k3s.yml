@@ -1,0 +1,83 @@
+- name: Install K3s server
+  hosts: master
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Wait for cloud-init to finish
+      ansible.builtin.command: cloud-init status --wait
+      register: cloud_init
+      changed_when: false
+      failed_when: cloud_init.rc not in [0, 2]
+
+    - name: Install K3s server
+      ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -s - server {{ k3s_server_args }}
+      args:
+        creates: /usr/local/bin/k3s
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version }}"
+
+    - name: Wait for node token
+      ansible.builtin.wait_for:
+        path: /var/lib/rancher/k3s/server/node-token
+
+    - name: Read node token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_raw
+
+    - name: Save node token
+      ansible.builtin.set_fact:
+        k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+- name: Install K3s agents
+  hosts: workers
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Wait for cloud-init to finish
+      ansible.builtin.command: cloud-init status --wait
+      register: cloud_init
+      changed_when: false
+      failed_when: cloud_init.rc not in [0, 2]
+
+    - name: Install K3s agent
+      ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -s - agent
+      args:
+        creates: /usr/local/bin/k3s
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version }}"
+        K3S_URL: "https://{{ k3s_master_ip }}:6443"
+        K3S_TOKEN: "{{ hostvars[groups['master'][0]]['k3s_token'] }}"
+
+- name: Copy kubeconfig to laptop
+  hosts: master
+  gather_facts: false
+  vars:
+    kubeconfig_path: "{{ lookup('env', 'HOME') }}/.kube/config"
+  tasks:
+    - name: Fetch kubeconfig
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ kubeconfig_path }}"
+        flat: true
+
+    - name: Point kubeconfig at master IP
+      ansible.builtin.replace:
+        path: "{{ kubeconfig_path }}"
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ k3s_master_ip }}:6443"
+      delegate_to: localhost
+      become: false
+
+    - name: Lock down kubeconfig permissions
+      ansible.builtin.file:
+        path: "{{ kubeconfig_path }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
