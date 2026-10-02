@@ -20,6 +20,7 @@ resource "proxmox_virtual_environment_vm" "k3s" {
 
   memory {
     dedicated = each.value.memory
+    floating  = 2048
   }
 
   disk {
