@@ -1,0 +1,11 @@
+pm_endpoint    = "https://<proxmox-ip>:8006/"
+pm_api_token   = "terraform@pve!provider=<token-secret>"
+node_name      = "pve"
+gateway        = "<gateway-ip>"
+ssh_public_key = "ssh-ed25519 AAAA..."
+
+k3s_nodes = {
+  "k3s-master"  = { vm_id = 101, ip = "<ip>/24", cores = 2, memory = 4096 }
+  "k3s-worker1" = { vm_id = 102, ip = "<ip>/24", cores = 2, memory = 3072 }
+  "k3s-worker2" = { vm_id = 103, ip = "<ip>/24", cores = 2, memory = 3072 }
+}
