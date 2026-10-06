@@ -37,6 +37,10 @@ resource "proxmox_virtual_environment_vm" "k3s" {
     datastore_id        = "local-lvm"
     vendor_data_file_id = "local:snippets/k3s-vendor.yaml"
 
+    dns {
+      servers = ["1.1.1.1", "8.8.8.8"]
+    }
+
     ip_config {
       ipv4 {
         address = each.value.ip
